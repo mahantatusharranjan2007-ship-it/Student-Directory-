@@ -1,0 +1,163 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: profiles
+    // Document ID: {profileId} (stringified student ID)
+    // Fields:
+    //   - id: number (required)
+    //   - name: string (required, max 100 chars)
+    //   - username: string (required, max 50 chars)
+    //   - rollNumber: string (required, max 50 chars)
+    //   - bio: string (optional, max 500 chars)
+    //   - imageUrl: string (optional, max 1000000 chars - base64)
+    //   - graduationYear: number (required)
+    //   - ownerUid: string (required, immutable)
+    //
+    // Collection: classes
+    // Document ID: {year}
+    // Fields:
+    //   - year: number (required)
+    //   - title: string (required, max 100 chars)
+    //   - createdAt: number (required)
+    //
+    // Collection: photos
+    // Document ID: {photoId}
+    // Fields:
+    //   - id: string (required)
+    //   - studentId: number (required)
+    //   - imageUrl: string (required, max 1000000 chars - base64)
+    //   - createdAt: number (required)
+    //   - ownerUid: string (required, immutable)
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner() {
+      return isAuthenticated() && (
+        !('ownerUid' in resource.data) || 
+        resource.data.ownerUid == null || 
+        resource.data.ownerUid == request.auth.uid
+      );
+    }
+
+    function isDocOwner() {
+      return isAuthenticated() && request.auth.uid == request.resource.data.ownerUid;
+    }
+
+    function uidUnchanged() {
+      return !('ownerUid' in request.resource.data) || request.resource.data.ownerUid == request.auth.uid;
+    }
+
+    function uidNotModified() {
+      return !('ownerUid' in request.resource.data) || 
+             !('ownerUid' in resource.data) || 
+             resource.data.ownerUid == null ||
+             request.resource.data.ownerUid == resource.data.ownerUid;
+    }
+
+    function hasRequiredFields(fields) {
+      return request.resource.data.keys().hasAll(fields);
+    }
+
+    function validStringLength(field, minLen, maxLen) {
+      return request.resource.data[field] is string &&
+        request.resource.data[field].size() >= minLen &&
+        request.resource.data[field].size() <= maxLen;
+    }
+
+    function isValidOptionalString(field, minLen, maxLen) {
+      return !(field in request.resource.data) ||
+             (request.resource.data[field] is string &&
+              request.resource.data[field].size() >= minLen &&
+              request.resource.data[field].size() <= maxLen);
+    }
+
+    function isValidProfileCreate() {
+      return hasRequiredFields(['id', 'name', 'username', 'rollNumber', 'graduationYear', 'ownerUid']) &&
+             request.resource.data.id is number &&
+             validStringLength('name', 1, 100) &&
+             validStringLength('username', 1, 50) &&
+             validStringLength('rollNumber', 1, 50) &&
+             isValidOptionalString('bio', 0, 500) &&
+             isValidOptionalString('imageUrl', 0, 5000000) &&
+             request.resource.data.graduationYear is number &&
+             request.resource.data.ownerUid == request.auth.uid;
+    }
+
+    function isValidProfileUpdate() {
+      return request.resource.data.id is number &&
+             validStringLength('name', 1, 100) &&
+             validStringLength('username', 1, 50) &&
+             validStringLength('rollNumber', 1, 50) &&
+             isValidOptionalString('bio', 0, 500) &&
+             isValidOptionalString('imageUrl', 0, 5000000) &&
+             request.resource.data.graduationYear is number &&
+             (request.resource.data.ownerUid == request.auth.uid || 
+              !('ownerUid' in resource.data) || 
+              resource.data.ownerUid == null ||
+              request.resource.data.ownerUid == resource.data.ownerUid);
+    }
+
+    function isValidClassCreate() {
+      return hasRequiredFields(['year', 'title', 'createdAt']) &&
+             request.resource.data.year is number &&
+             validStringLength('title', 1, 100) &&
+             isValidOptionalString('imageUrl', 0, 5000000) &&
+             request.resource.data.createdAt is number;
+    }
+
+    function isValidClassUpdate() {
+      return request.resource.data.year is number &&
+             validStringLength('title', 1, 100) &&
+             isValidOptionalString('imageUrl', 0, 5000000) &&
+             request.resource.data.createdAt is number;
+    }
+
+    function isValidPhotoCreate() {
+      return hasRequiredFields(['id', 'studentId', 'imageUrl', 'createdAt', 'ownerUid']) &&
+             request.resource.data.id is string &&
+             request.resource.data.studentId is number &&
+             validStringLength('imageUrl', 1, 5000000) &&
+             request.resource.data.createdAt is number &&
+             request.resource.data.ownerUid == request.auth.uid;
+    }
+
+    function isValidPhotoUpdate() {
+      return request.resource.data.id is string &&
+             request.resource.data.studentId is number &&
+             validStringLength('imageUrl', 1, 5000000) &&
+             request.resource.data.createdAt is number &&
+             request.resource.data.ownerUid == request.auth.uid;
+    }
+
+    match /settings/{document} {
+      allow read: if true;
+      allow write: if isAuthenticated();
+    }
+
+    match /classes/{year} {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    match /profiles/{profileId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    match /photos/{photoId} {
+      allow read: if true;
+      allow write: if true;
+    }
+  }
+}
