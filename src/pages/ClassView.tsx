@@ -4,6 +4,7 @@ import { motion } from 'motion/react';
 import { useAuth } from '../contexts/AuthContext';
 import { ArrowLeft, UserPlus, Image as ImageIcon } from 'lucide-react';
 import { students as mockStudents } from '../data';
+import { dataService, StudentProfile } from '../lib/dataService';
 
 const compressImage = (file: File, maxWidth: number = 1920, quality: number = 0.8): Promise<string> => {
   return new Promise((resolve, reject) => {
@@ -36,18 +37,6 @@ const compressImage = (file: File, maxWidth: number = 1920, quality: number = 0.
   });
 };
 
-interface StudentProfile {
-  id: number;
-  name: string;
-  username: string;
-  rollNumber: string;
-  bio: string;
-  imageUrl: string;
-  graduationYear: number;
-  ownerUid: string;
-  tc?: boolean;
-}
-
 export default function ClassView() {
   const { year } = useParams<{ year: string }>();
   const navigate = useNavigate();
@@ -65,11 +54,8 @@ export default function ClassView() {
     // Fetch class info
     const fetchClassInfo = async () => {
       try {
-        const response = await fetch(`/api/classes/${year}`);
-        if (response.ok) {
-          const data = await response.json();
-          setClassInfo(data);
-        }
+        const data = await dataService.getClassByYear(year);
+        setClassInfo(data);
       } catch (err) {
         console.error("Error fetching class info:", err);
       }
@@ -78,11 +64,7 @@ export default function ClassView() {
 
     const fetchStudents = async () => {
       try {
-        const response = await fetch(`/api/profiles?graduationYear=${yearNum}`);
-        if (!response.ok) {
-          throw new Error('Failed to fetch from API');
-        }
-        const loadedStudents: StudentProfile[] = await response.json();
+        const loadedStudents = await dataService.getProfiles(yearNum);
 
         // Merge with mock data for demonstration if empty or missing
         const mockClassStudents = mockStudents.filter(s => s.graduationYear === yearNum);
@@ -123,21 +105,12 @@ export default function ClassView() {
     if (file && user && year) {
       try {
         const base64String = await compressImage(file, 1920, 0.8);
-        const response = await fetch(`/api/classes/${year}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            imageUrl: base64String,
-            year: parseInt(year),
-            title: `Class of ${year}-27`
-          })
+        const updatedClass = await dataService.updateClass(year, {
+          imageUrl: base64String,
+          year: parseInt(year),
+          title: `Class of ${year}${year === '2024' ? '-27' : ''}`
         });
-        if (response.ok) {
-          const updatedClass = await response.json();
-          setClassInfo(updatedClass);
-        } else {
-          throw new Error('Failed to update cover image');
-        }
+        setClassInfo(updatedClass);
       } catch (error) {
         console.error("Cover upload error:", error);
         alert("Failed to upload cover image. Please try a different image.");

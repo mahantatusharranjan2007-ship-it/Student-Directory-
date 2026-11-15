@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { dataService } from '../lib/dataService';
 
 interface SettingsContextType {
   isEditingDisabled: boolean;
@@ -13,11 +14,8 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   useEffect(() => {
     const fetchSettings = async () => {
       try {
-        const response = await fetch('/api/settings');
-        if (response.ok) {
-          const data = await response.json();
-          setIsEditingDisabled(data.isEditingDisabled);
-        }
+        const data = await dataService.getSettings();
+        setIsEditingDisabled(data.isEditingDisabled);
       } catch (error) {
         console.error("Error fetching settings:", error);
       }
@@ -28,14 +26,8 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const toggleEditProfile = async () => {
     const newState = !isEditingDisabled;
     try {
-      const response = await fetch('/api/settings', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ isEditingDisabled: newState })
-      });
-      if (response.ok) {
-        setIsEditingDisabled(newState);
-      }
+      await dataService.updateSettings({ isEditingDisabled: newState });
+      setIsEditingDisabled(newState);
     } catch (error) {
       console.error("Error updating settings:", error);
     }

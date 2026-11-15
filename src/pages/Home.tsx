@@ -3,13 +3,7 @@ import { Link } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { useAuth } from '../contexts/AuthContext';
 import { Plus, GraduationCap } from 'lucide-react';
-
-interface ClassGroup {
-  year: number;
-  title: string;
-  createdAt: number;
-  imageUrl?: string;
-}
+import { ClassGroup, dataService } from '../lib/dataService';
 
 export default function Home() {
   const { user } = useAuth();
@@ -19,25 +13,16 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
 
   const fetchClasses = async () => {
-    const defaultClasses = [
-      { year: 2024, title: 'Class of 2024-27', createdAt: Date.now() },
-      { year: 2025, title: 'Class of 2025', createdAt: Date.now() }
-    ];
     try {
-      const response = await fetch('/api/classes');
-      if (response.ok) {
-        const data = await response.json();
-        if (Array.isArray(data) && data.length > 0) {
-          setClasses(data);
-          setError(null);
-          return;
-        }
-      }
-      setClasses(defaultClasses);
+      const data = await dataService.getClasses();
+      setClasses(data);
       setError(null);
     } catch (err) {
       console.warn("Using default classes fallback:", err);
-      setClasses(defaultClasses);
+      setClasses([
+        { year: 2024, title: 'Class of 2024-27', createdAt: Date.now() },
+        { year: 2025, title: 'Class of 2025', createdAt: Date.now() }
+      ]);
       setError(null);
     }
   };
@@ -57,14 +42,10 @@ export default function Home() {
     }
 
     try {
-      await fetch('/api/classes', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          year: yearNum,
-          title: `Class of ${yearNum}-27`,
-          createdAt: Date.now()
-        })
+      await dataService.createClass({
+        year: yearNum,
+        title: `Class of ${yearNum}-27`,
+        createdAt: Date.now()
       });
       setIsAdding(false);
       setNewYear('');

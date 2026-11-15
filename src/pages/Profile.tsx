@@ -6,14 +6,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useSettings } from '../contexts/SettingsContext';
 import Cropper from 'react-easy-crop';
 import { DEVELOPER_EMAILS } from '../constants';
-
-interface Photo {
-  id: string;
-  studentId: number;
-  imageUrl: string;
-  createdAt: number;
-  ownerUid: string;
-}
+import { dataService, Photo } from '../lib/dataService';
 
 const compressImage = (file: File, maxWidth: number = 800, quality: number = 0.7): Promise<string> => {
   return new Promise((resolve, reject) => {
@@ -132,28 +125,25 @@ export default function Profile() {
 
   const [error, setError] = useState<string | null>(null);
 
-  // Load profile data from Firestore via backend caching API
+  // Load profile data from API or Firestore
   useEffect(() => {
     if (!id) return;
     const fetchProfile = async () => {
       try {
-        const response = await fetch(`/api/profiles/${id}`);
-        if (response.ok) {
-          const data = await response.json();
-          if (data) {
-            setProfileData({
-              name: data.name,
-              username: data.username,
-              rollNumber: data.rollNumber,
-              bio: data.bio || '',
-              imageUrl: data.imageUrl || student?.imageUrl || '',
-              graduationYear: data.graduationYear || student?.graduationYear || 2024,
-              instagram: data.instagram || '',
-              snapchat: data.snapchat || '',
-              tc: data.tc || false,
-              ownerUid: data.ownerUid,
-            });
-          }
+        const data = await dataService.getProfileById(id);
+        if (data) {
+          setProfileData({
+            name: data.name,
+            username: data.username,
+            rollNumber: data.rollNumber,
+            bio: data.bio || '',
+            imageUrl: data.imageUrl || student?.imageUrl || '',
+            graduationYear: data.graduationYear || student?.graduationYear || 2024,
+            instagram: data.instagram || '',
+            snapchat: data.snapchat || '',
+            tc: data.tc || false,
+            ownerUid: data.ownerUid,
+          });
         }
         setError(null);
       } catch (err: any) {
@@ -163,17 +153,13 @@ export default function Profile() {
     fetchProfile();
   }, [id, student]);
 
-  // Load photos from Firestore via backend caching API
+  // Load photos from API or Firestore
   useEffect(() => {
     if (!id) return;
 
     const fetchPhotos = async () => {
       try {
-        const response = await fetch(`/api/photos?studentId=${id}`);
-        if (!response.ok) {
-          throw new Error('Failed to fetch photos');
-        }
-        const loadedPhotos: Photo[] = await response.json();
+        const loadedPhotos = await dataService.getPhotos(id);
         
         // If no photos and we have a mock student, show mock photos
         if (loadedPhotos.length === 0 && student) {
@@ -248,16 +234,8 @@ export default function Profile() {
           createdAt: Date.now(),
           ownerUid: user.uid
         };
-        const response = await fetch('/api/photos', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(newPhoto)
-        });
-        if (response.ok) {
-          setImages(prev => [newPhoto, ...prev.filter(img => !img.id.startsWith('dummy'))]);
-        } else {
-          throw new Error('Photo upload failed on server');
-        }
+        await dataService.uploadPhoto(newPhoto);
+        setImages(prev => [newPhoto, ...prev.filter(img => !img.id.startsWith('dummy'))]);
       } catch (error) {
         console.error("Image upload error:", error);
         alert("Failed to upload image. Please try a different image.");
@@ -325,28 +303,20 @@ export default function Profile() {
       return;
     }
     try {
-      const response = await fetch('/api/profiles', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          id: Number(id),
-          name: profileData.name,
-          username: profileData.username,
-          rollNumber: profileData.rollNumber,
-          bio: profileData.bio,
-          imageUrl: profileData.imageUrl,
-          graduationYear: Number(profileData.graduationYear),
-          instagram: profileData.instagram || '',
-          snapchat: profileData.snapchat || '',
-          tc: !!profileData.tc,
-          ownerUid: user.uid
-        })
+      await dataService.saveProfile({
+        id: Number(id),
+        name: profileData.name,
+        username: profileData.username,
+        rollNumber: profileData.rollNumber,
+        bio: profileData.bio,
+        imageUrl: profileData.imageUrl,
+        graduationYear: Number(profileData.graduationYear),
+        instagram: profileData.instagram || '',
+        snapchat: profileData.snapchat || '',
+        tc: !!profileData.tc,
+        ownerUid: user.uid
       });
-      if (response.ok) {
-        setIsEditing(false);
-      } else {
-        throw new Error('Save profile failed on server');
-      }
+      setIsEditing(false);
     } catch (error) {
       console.error("Save error:", error);
       alert("Failed to save profile. Please ensure all fields are valid and the image is not too large.");
@@ -364,14 +334,8 @@ export default function Profile() {
       return;
     }
     try {
-      const response = await fetch(`/api/photos/${photo.id}`, {
-        method: 'DELETE'
-      });
-      if (response.ok) {
-        setImages(prev => prev.filter(p => p.id !== photo.id));
-      } else {
-        throw new Error('Delete photo failed on server');
-      }
+      await dataService.deletePhoto(photo.id);
+      setImages(prev => prev.filter(p => p.id !== photo.id));
     } catch (error) {
       console.error("Delete photo error:", error);
       alert("Failed to delete photo.");
