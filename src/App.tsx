@@ -4,6 +4,7 @@
  */
 
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { Analytics } from '@vercel/analytics/react';
 import Home from './pages/Home';
 import Profile from './pages/Profile';
 import ClassView from './pages/ClassView';
@@ -24,6 +25,7 @@ export default function App() {
             </Route>
           </Routes>
         </Router>
+        <Analytics />
       </SettingsProvider>
     </AuthProvider>
   );
